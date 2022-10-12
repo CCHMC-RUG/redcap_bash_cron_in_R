@@ -1,0 +1,148 @@
+---
+title: "Using R to Coordinate, Analyze, and Share Community Survey Data"
+author: "Andrew Vancil"
+date: "10/12/2022"
+format: 
+  revealjs:
+    theme: moon
+editor: visual
+---
+
+## All Children Thrive and SAFE (and R)
+
+-   Cincinnati Children's & All Children Thrive (ACT) are investigating household food availability in targeted neighborhoods in a program called System to Achieve Food Equity (SAFE)
+
+-   The goal is to identify the food gap between what people can afford and what they need.
+
+-   In this project, I use R to access and analyze data in REDCap, run a bash script to geocode addresses, compile a shareable report and schedule all of these actions to run automatically
+
+## SAFE Data Flow
+
+![Data flow](figs/safe_data_flow.svg)
+
+## REDCap and R
+
+-   SAFE employs a weekly survey administered through REDCap and is taken by community members in the target neighborhoods
+
+-   From R, we can access our REDCap data using the REDCap [API](https://geomarker.io/r_api_talk/#1)
+
+    -   Using the API (and the correct permissions), we are able to read our data into our R environment, edit the data, and write to our REDCap database
+
+## {REDCapR}
+
+-   The {[REDCapR](https://ouhscbbmc.github.io/REDCapR/)} package is an excellent tool for accessing the API
+
+Sample read:
+
+```{r }
+#| eval: false
+#| echo: true
+#| code-line-numbers: "|1-2|3-4|5"
+
+data <- redcap_read(redcap_uri = my_url,
+                    token = my_token,
+                    export_checkbox_label = TRUE,
+                    export_survey_fields = TRUE,
+                    raw_or_label = 'label')$data
+```
+
+## {REDCapR}
+
+-   We can do our thing with the data - cleaning, analysis, whatever we need.
+
+-   We can also edit the data itself and write it back to REDCap
+
+    -   For example, I had to edit completed records by coding values in a new hidden "field" in R systematically. From there, I wrote the adjusted data back to REDCap
+
+------------------------------------------------------------------------
+
+Sample write:
+
+```{r}
+#| eval: false
+#| echo: true
+#| code-line-numbers: "|1-2|3"
+
+redcap_write(redcap_uri = my_url,
+             token = my_token,
+             ds = d_edited)
+```
+
+-   Note: when you write to REDCap, everything will be overwritten, so only upload the column/field that you need and the record ID
+
+## Geocoding with bash {.scrollable}
+
+-   In order to geocode addresses (retrieve their geographic position on a map), we use our own DeGAUSS program, which is run through Docker using the command line
+
+-   However, in order to stay in our R environment, we can run a bash chunk in an RMarkdown file by specifying `{bash, enging.opts = '-l'}` and writing our bash code
+
+------------------------------------------------------------------------
+
+```{bash, engine.opts='-l'}
+#| eval: false
+#| echo: true
+
+docker run --rm -v $PWD:/tmp ghcr.io/degauss-org/geocoder:3.0.2 SAFE_addresses.csv
+
+docker run --rm -v $PWD:/tmp ghcr.io/degauss-org/census_block_group:0.4.2 SAFE_addresses_geocoded_v3.0.2.csv 2020
+
+```
+
+-   Running this chunk (or the Rmarkdown file it is contained in) will perform two calls to Docker as if written in the command line and output .csv files with first the geocoded coordinates and then the census tract ids for each address
+
+## RMarkdown Reports {.scrollable}
+
+-   RMarkdown is a powerful tool for generating awesome HTML or PDF data reports
+
+-   {[ggiraph](https://davidgohel.github.io/ggiraph/)} is great for turning {ggplot} visuals into interactive html widgets
+
+```{r}
+#| echo: false
+#| fig.height: 60
+#| out.height: 60
+
+knitr::include_url("figs/ggiraph_ex.html", height = 800)
+
+```
+
+## RMarkdown Reports {.scrollable}
+
+-   An awesome tool to create interactive maps from the data we geocoded earlier is {[tmap](https://r-tmap.github.io/tmap-book/)}
+    -   You can easily create either publication-ready, static maps or interactive html maps with leaflet
+
+```{r}
+#| echo: false
+
+knitr::include_url("figs/tmap_ex.html")
+
+```
+
+## Schedule Automation
+
+::: incremental
+-   Now that we have scripts that do all of these things, do we have to remember to run them all?
+
+-   No!
+
+-   Enter: {cronR}
+:::
+
+## Schedule Automation
+
+-   {[cronR](https://github.com/bnosac/cronR)} is a package that you can use in R to access the native Mac scheduler cron
+    -   A Windows companion package is called {[taskscheduleR](https://cran.r-project.org/web/packages/taskscheduleR/vignettes/taskscheduleR.html)} and accesses Task Scheduler
+-   You can easily schedule scripts to repeatedly run using using code lines or a handy Shiny GUI available in the "Addins" menu in RStudio
+
+------------------------------------------------------------------------
+
+![cron](figs/cronR_screenshot.png)
+
+## Summary
+
+-   Here we have discussed using R to utilize the REDCap API, execute command line scripts, generate interactive visuals and schedule all of these things to run automatically
+
+-   While this workflow was designed for a single project, this framework can be broadly applied and implemented elsewhere
+
+-   Please reach out with any follow-up questions!
+
+    -   andrew.vancil\@cchmc.org
